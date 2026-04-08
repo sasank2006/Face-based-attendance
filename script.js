@@ -26,6 +26,7 @@ function showPage(pageId) {
         if (pageId === 'users') loadUsers();
         if (pageId === 'timetable') loadTimetable();
         if (pageId === 'attendance') loadDashboard(); // Reuse for both
+        if (pageId === 'analytics') loadAnalytics();
     }
 }
 
@@ -120,7 +121,7 @@ async function loadDashboard() {
             tbody.innerHTML = attendance.slice(0, 5).map(a => `
                 <tr>
                     <td>${a.name}</td>
-                    <td>${a.subject || 'General'}</td>
+                    <td>${(a.subject === 'General' || a.subject === 'Campus') ? '<span style="color:var(--text-muted);">Present in Campus</span>' : a.subject}</td>
                     <td>${a.time}</td>
                 </tr>
             `).join('');
@@ -128,10 +129,12 @@ async function loadDashboard() {
         
         const fullTbody = document.getElementById('full-attendance-tbody');
         if (fullTbody) {
-            fullTbody.innerHTML = attendance.map(a => `
+            fullTbody.innerHTML = attendance
+                .filter(a => a.subject !== 'General' && a.subject !== 'Campus')
+                .map(a => `
                 <tr>
                     <td>${a.name}</td>
-                    <td>${a.subject || 'General'}</td>
+                    <td>${a.subject}</td>
                     <td>${a.time}</td>
                 </tr>
             `).join('');
@@ -338,6 +341,101 @@ async function clearMockTime() {
         document.getElementById('mock-status').innerText = 'Real time active';
         setTimeout(() => document.getElementById('mock-status').innerText = '', 2000);
     } catch(err) { console.error(err); }
+}
+
+// Analytics Logic
+async function loadAnalytics() {
+    try {
+        const res = await fetch(`${API_URL}/analytics`);
+        const data = await res.json();
+        
+        const tbody = document.getElementById('analytics-tbody');
+        if (tbody) {
+            tbody.innerHTML = data.map(u => {
+                let insight = '';
+                let insightClass = '';
+                
+                if (u.attendance_perc > 75 && u.performance_score > 75) {
+                    insight = "Strong Link";
+                    insightClass = "bg-green";
+                } else if (u.attendance_perc < 50 && u.performance_score < 50) {
+                    insight = "At Risk";
+                    insightClass = "bg-red";
+                } else if (u.attendance_perc > 80 && u.performance_score < 60) {
+                    insight = "Review Needed";
+                    insightClass = "bg-purple";
+                } else {
+                    insight = "Normal";
+                    insightClass = "";
+                }
+                
+                let insightLabel = insightClass ? `<span class="insight-pill ${insightClass}">${insight}</span>` : `<span style="color:var(--text-muted);font-size:0.8rem;">${insight}</span>`;
+                
+                let attColor = u.attendance_perc > 75 ? 'bg-green' : (u.attendance_perc < 50 ? 'bg-red' : 'bg-purple');
+                let perfColor = u.performance_score > 75 ? 'bg-green' : (u.performance_score < 50 ? 'bg-red' : 'bg-purple');
+
+                return `
+                <tr>
+                    <td><strong>${u.name}</strong><br><span style="font-size:0.7rem;color:var(--text-muted)">Total Classes: ${u.attendance_count}</span></td>
+                    <td>
+                        <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:0.2rem;">
+                            <span>Score</span><span>${u.attendance_perc}%</span>
+                        </div>
+                        <div class="analytics-bar-bg">
+                            <div class="analytics-bar-fill ${attColor}" style="width: ${u.attendance_perc}%"></div>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:0.2rem;">
+                            <span>Grade</span><span>${u.performance_score}%</span>
+                        </div>
+                        <div class="analytics-bar-bg">
+                            <div class="analytics-bar-fill ${perfColor}" style="width: ${u.performance_score}%"></div>
+                        </div>
+                    </td>
+                    <td>${insightLabel}</td>
+                </tr>
+                `;
+            }).join('');
+        }
+        
+        const userRes = await fetch(`${API_URL}/status`);
+        const userData = await userRes.json();
+        const select = document.getElementById('perf-user-select');
+        if (select && userData.users) {
+            select.innerHTML = '<option value="">-- Choose User --</option>' + userData.users.map(u => `<option value="${u}" style="color:black;">${u}</option>`).join('');
+        }
+        
+    } catch (err) {
+        console.error("Analytics load error:", err);
+    }
+}
+
+async function savePerformance() {
+    const name = document.getElementById('perf-user-select').value;
+    const score = parseInt(document.getElementById('perf-score').value);
+    const status = document.getElementById('perf-status');
+    
+    if (!name || isNaN(score) || score < 0 || score > 100) {
+        status.innerText = "Please select a user and enter a valid score (0-100).";
+        return;
+    }
+    
+    try {
+        await fetch(`${API_URL}/performance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, score: score })
+        });
+        status.innerText = "Academic score assigned seamlessly!";
+        document.getElementById('perf-score').value = '';
+        loadAnalytics();
+        
+        setTimeout(() => status.innerText = '', 3000);
+    } catch (err) {
+        status.innerText = "Failed to assign score.";
+        console.error(err);
+    }
 }
 
 // Init

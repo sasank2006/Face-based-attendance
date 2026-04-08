@@ -10,5 +10,14 @@
         "start_time": "10:11",
         "end_time": "10:20",
         "id": 1775623291
+    },
+    {
+        "subject": "DS",
+        "start_time": "01:00",
+        "end_time": "01:12",
+        "enrolled_users": [
+            "jaikanth"
+        ],
+        "id": 1775623964
     }
 ]

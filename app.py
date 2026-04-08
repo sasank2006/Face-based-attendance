@@ -23,6 +23,7 @@ DATASETS_DIR = 'datasets'
 HAAR_FILE = 'haarcascade_frontalface_default.xml'
 ATTENDANCE_FILE = 'attendance.csv'
 TIMETABLE_FILE = 'timetable.json'
+PERFORMANCE_FILE = 'performance.json'
 (WIDTH, HEIGHT) = (130, 100)
 CONFIDENCE_THRESHOLD = 80
 
@@ -303,6 +304,65 @@ async def delete_timetable(slot_id: int):
     with open(TIMETABLE_FILE, 'w') as f:
         json.dump(slots, f, indent=4)
     return {"status": "deleted"}
+
+class PerformanceData(BaseModel):
+    name: str
+    score: int
+
+@app.post("/performance")
+async def update_performance(data: PerformanceData):
+    perf_data = {}
+    if os.path.exists(PERFORMANCE_FILE):
+        with open(PERFORMANCE_FILE, 'r') as f:
+            try: perf_data = json.load(f)
+            except: pass
+    
+    perf_data[data.name] = data.score
+    
+    with open(PERFORMANCE_FILE, 'w') as f:
+        json.dump(perf_data, f)
+        
+    return {"status": "success"}
+
+@app.get("/analytics")
+async def get_analytics():
+    perf_data = {}
+    if os.path.exists(PERFORMANCE_FILE):
+        with open(PERFORMANCE_FILE, 'r') as f:
+            try: perf_data = json.load(f)
+            except: pass
+            
+    attendance_counts = {}
+    if os.path.exists(ATTENDANCE_FILE):
+        with open(ATTENDANCE_FILE, 'r') as f:
+            next(f, None)
+            for line in f:
+                parts = line.strip().split(',')
+                if len(parts) >= 3:
+                    name = parts[0].strip()
+                    subject = parts[1].strip()
+                    if subject not in ["General", "Campus"]:
+                        attendance_counts[name] = attendance_counts.get(name, 0) + 1
+                        
+    # Ensure distinct user mapping
+    all_users = set(names_map.values())
+    analytics = []
+    max_att = max(attendance_counts.values()) if attendance_counts else 1
+    if max_att == 0: max_att = 1
+    
+    for u in all_users:
+        score = perf_data.get(u, 0)
+        att_c = attendance_counts.get(u, 0)
+        att_perc = (att_c / max_att) * 100
+        
+        analytics.append({
+            "name": u,
+            "attendance_count": att_c,
+            "attendance_perc": round(att_perc),
+            "performance_score": score
+        })
+        
+    return analytics
 
 if __name__ == "__main__":
     import uvicorn

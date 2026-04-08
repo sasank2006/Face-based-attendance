@@ -285,3 +285,39 @@ input:focus {
     border-color: var(--primary);
     box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
 }
+
+/* Analytics UI Bars */
+.analytics-bar-bg {
+    background: var(--glass);
+    border-radius: 6px;
+    height: 8px;
+    width: 100%;
+    margin-top: 0.3rem;
+    overflow: hidden;
+}
+
+.analytics-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s ease-out;
+}
+
+.bg-purple {
+    background: #c084fc;
+}
+
+.bg-green {
+    background: #10b981;
+}
+
+.bg-red {
+    background: #ef4444;
+}
+
+.insight-pill {
+    padding: 0.3rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-block;
+}
