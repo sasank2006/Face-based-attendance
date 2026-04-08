@@ -16,7 +16,25 @@ A simple and efficient face recognition system built with Python and OpenCV. Thi
 pip install opencv-contrib-python
 ```
 
-## How to Use
+## 🌐 Web Interface (New!)
+The project now includes a premium web dashboard for a better user experience.
+
+### 1. Install Web Dependencies
+```bash
+pip install fastapi uvicorn python-multipart
+```
+
+### 2. Start the Backend
+```bash
+python app.py
+```
+
+### 3. Open the Dashboard
+Simply open `index.html` in your web browser (Chrome, Edge, etc.).
+
+---
+
+## 🚀 How to Use (Classic CLI)
 
 ### 1. Capture Face Data
 Run the following command and enter your name:
@@ -32,8 +50,10 @@ python atten.py
 Press **ESC** to stop the camera and shutdown the system.
 
 ## Project Structure
-- `datacreate.py`: Script to capture face data.
-- `atten.py`: Main recognition and attendance script.
+- `app.py`: FastAPI backend for the web interface.
+- `index.html`, `style.css`, `script.js`: Web frontend files.
+- `datacreate.py`: CLI script to capture face data.
+- `atten.py`: CLI recognition script.
 - `haarcascade_frontalface_default.xml`: Pre-trained model for face detection.
 - `datasets/`: Folder containing trained face images (auto-generated).
 - `attendance.csv`: Log file (auto-generated).

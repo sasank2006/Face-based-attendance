@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FaceID Attendance Pro</title>
+    <link rel="stylesheet" href="style.css?v=3">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav>
+        <div class="logo">FaceID Pro</div>
+        <ul class="nav-links">
+            <li class="active" onclick="showPage('dashboard')">Dashboard</li>
+            <li onclick="showPage('scanner')">Live Scanner</li>
+            <li onclick="showPage('users')">User Manager</li>
+        </ul>
+        <div style="margin-top: auto;">
+            <p style="font-size: 0.8rem; color: var(--text-muted);">System v2.0</p>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Dashboard Page -->
+        <div id="dashboard" class="page active">
+            <h1>Dashboard</h1>
+            <div class="grid">
+                <div class="card">
+                    <h3>Total Users</h3>
+                    <div id="total-users" style="font-size: 2.5rem; font-weight: 800;">0</div>
+                </div>
+                <div class="card">
+                    <h3>Today's Attendance</h3>
+                    <div id="today-count" style="font-size: 2.5rem; font-weight: 800; color: var(--primary);">0</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>Recent Activity</h3>
+                    <button class="btn btn-danger" onclick="clearLogs()" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Clear All Logs</button>
+                </div>
+                <div class="attendance-list">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-tbody">
+                            <!-- Data injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scanner Page -->
+        <div id="scanner" class="page">
+            <h1>Live Scanner</h1>
+            <p style="color: var(--text-muted); margin-bottom: 2rem;">Fast and secure face recognition.</p>
+            
+            <div class="scanner-container">
+                <video id="video" style="display:none;" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+
+            <div style="text-align: center; margin-top: 2rem;">
+                <p id="scan-status">Waiting for stream...</p>
+            </div>
+        </div>
+
+        <!-- Users Page -->
+        <div id="users" class="page">
+            <h1>User Manager</h1>
+            <div class="grid">
+                <div class="card">
+                    <h3>Add New User</h3>
+                    <input type="text" id="new-user-name" placeholder="Full Name">
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
+                        Capture images by looking at the camera.
+                    </p>
+                    <button class="btn" id="start-capture-btn">Start Capture</button>
+                    <div id="capture-status" style="margin-top: 1rem; color: var(--primary);"></div>
+                </div>
+                
+                <div class="card">
+                    <h3>Registered Users</h3>
+                    <div id="registered-users-list" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem;">
+                        <!-- List of names -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js?v=4"></script>
+</body>
+</html>
