@@ -14,8 +14,21 @@
             <li class="active" onclick="showPage('dashboard')">Dashboard</li>
             <li onclick="showPage('scanner')">Live Scanner</li>
             <li onclick="showPage('users')">User Manager</li>
+            <li onclick="showPage('timetable')">Timetable</li>
+            <li onclick="showPage('attendance')">Attendance Record</li>
         </ul>
         <div style="margin-top: auto;">
+            <div style="margin-bottom: 1rem; border-top: 1px solid #333; padding-top: 1rem;">
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">Mock Clock (HH:MM)</p>
+                <div style="display: flex; gap: 0.2rem;">
+                    <input type="time" id="mock-time-input" style="padding: 0.2rem; font-size: 0.8rem; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; width: 100%;">
+                </div>
+                <div style="display: flex; gap: 0.2rem; margin-top: 0.5rem;">
+                    <button class="btn" style="padding: 0.2rem 0.4rem; font-size: 0.7rem; flex: 1;" onclick="setMockTime()">Set</button>
+                    <button class="btn" style="padding: 0.2rem 0.4rem; font-size: 0.7rem; flex: 1; background: #e63946;" onclick="clearMockTime()">Reset</button>
+                </div>
+                <div id="mock-status" style="font-size: 0.7rem; color: var(--primary); margin-top: 0.5rem;"></div>
+            </div>
             <p style="font-size: 0.8rem; color: var(--text-muted);">System v2.0</p>
         </div>
     </nav>
@@ -45,6 +58,7 @@
                         <thead>
                             <tr>
                                 <th>Name</th>
+                                <th>Subject</th>
                                 <th>Timestamp</th>
                             </tr>
                         </thead>
@@ -90,6 +104,82 @@
                     <div id="registered-users-list" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem;">
                         <!-- List of names -->
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timetable Page -->
+        <div id="timetable" class="page">
+            <h1>Timetable</h1>
+            <div class="grid">
+                <div class="card">
+                    <h3>Add Subject Slot</h3>
+                    <input type="text" id="subject-name" placeholder="Subject Name (e.g. Mathematics)">
+                    <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted);">Start Time</label>
+                            <input type="time" id="start-time" required>
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted);">End Time</label>
+                            <input type="time" id="end-time" required>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 1.5rem;">
+                        <label style="font-size: 0.8rem; color: var(--text-muted);">Select Enrolled Students</label>
+                        <div id="timetable-student-selector" class="student-selector">
+                            <!-- Pills injected by JS -->
+                            <span style="color: var(--text-muted); font-size: 0.8rem;">Loading users...</span>
+                        </div>
+                    </div>
+
+                    <button class="btn" style="margin-top: 1rem;" onclick="addTimetableSlot()">Add to Timetable</button>
+                    <div id="timetable-status" style="margin-top: 1rem; color: var(--primary);"></div>
+                </div>
+                
+                <div class="card">
+                    <h3>Current Timetable</h3>
+                    <div class="attendance-list" style="margin-top: 1rem;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Subject</th>
+                                    <th>Time Box</th>
+                                    <th>Enrolled Students</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="timetable-list">
+                                <!-- Data injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Page -->
+        <div id="attendance" class="page">
+            <h1>Attendance Records</h1>
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3>All Logs</h3>
+                    <button class="btn btn-danger" onclick="clearLogs()" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Clear All Logs</button>
+                </div>
+                <div class="attendance-list">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Subject</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="full-attendance-tbody">
+                            <!-- Data injected by JS -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

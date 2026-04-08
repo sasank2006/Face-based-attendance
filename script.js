@@ -24,6 +24,8 @@ function showPage(pageId) {
         scanning = false;
         if (pageId === 'dashboard') loadDashboard();
         if (pageId === 'users') loadUsers();
+        if (pageId === 'timetable') loadTimetable();
+        if (pageId === 'attendance') loadDashboard(); // Reuse for both
     }
 }
 
@@ -114,12 +116,26 @@ async function loadDashboard() {
         document.getElementById('today-count').innerText = attendance.length;
 
         const tbody = document.getElementById('attendance-tbody');
-        tbody.innerHTML = attendance.map(a => `
-            <tr>
-                <td>${a.name}</td>
-                <td>${a.time}</td>
-            </tr>
-        `).join('');
+        if (tbody) {
+            tbody.innerHTML = attendance.slice(0, 5).map(a => `
+                <tr>
+                    <td>${a.name}</td>
+                    <td>${a.subject || 'General'}</td>
+                    <td>${a.time}</td>
+                </tr>
+            `).join('');
+        }
+        
+        const fullTbody = document.getElementById('full-attendance-tbody');
+        if (fullTbody) {
+            fullTbody.innerHTML = attendance.map(a => `
+                <tr>
+                    <td>${a.name}</td>
+                    <td>${a.subject || 'General'}</td>
+                    <td>${a.time}</td>
+                </tr>
+            `).join('');
+        }
     } catch (err) {
         console.error("Dashboard hit error:", err);
     }
@@ -206,6 +222,123 @@ async function deleteUser(name) {
     }
 }
 
+
+// Timetable logic
+let selectedTimetableUsers = new Set();
+
+function toggleTimetableUser(user, elt) {
+    if (selectedTimetableUsers.has(user)) {
+        selectedTimetableUsers.delete(user);
+        elt.classList.remove('selected');
+    } else {
+        selectedTimetableUsers.add(user);
+        elt.classList.add('selected');
+    }
+}
+
+async function loadTimetable() {
+    try {
+        const res = await fetch(`${API_URL}/timetable`);
+        const data = await res.json();
+        const list = document.getElementById('timetable-list');
+        list.innerHTML = data.map(t => `
+            <tr>
+                <td>${t.subject}</td>
+                <td>${t.start_time} - ${t.end_time}</td>
+                <td>${(t.enrolled_users && t.enrolled_users.length > 0) ? t.enrolled_users.map(u => `<span style="background:var(--primary);color:white;padding:0.2rem 0.5rem;border-radius:10px;font-size:0.7rem;margin-right:0.3rem;">${u}</span>`).join('') : '<span style="color:var(--text-muted);font-size:0.8rem;">All Active</span>'}</td>
+                <td><button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="deleteTimetableSlot(${t.id})">Delete</button></td>
+            </tr>
+        `).join('');
+
+        const userRes = await fetch(`${API_URL}/status`);
+        const userData = await userRes.json();
+        selectedTimetableUsers.clear();
+        
+        const selector = document.getElementById('timetable-student-selector');
+        if (selector && userData.users) {
+            selector.innerHTML = userData.users.map(u => `
+                <div class="user-pill" onclick="toggleTimetableUser('${u}', this)">${u}</div>
+            `).join('');
+            if (userData.users.length === 0) {
+                 selector.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">No users registered yet.</span>';
+            }
+        }
+    } catch (err) {
+        console.error("Timetable load error:", err);
+    }
+}
+
+async function addTimetableSlot() {
+    const subject = document.getElementById('subject-name').value.trim();
+    const start = document.getElementById('start-time').value;
+    const end = document.getElementById('end-time').value;
+    const status = document.getElementById('timetable-status');
+
+    if (!subject || !start || !end) {
+        status.innerText = "Please fill in all fields.";
+        return;
+    }
+    
+    if (start >= end) {
+        status.innerText = "Start time must be before end time.";
+        return;
+    }
+
+    try {
+        await fetch(`${API_URL}/timetable`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                subject: subject, 
+                start_time: start, 
+                end_time: end,
+                enrolled_users: Array.from(selectedTimetableUsers)
+            })
+        });
+        status.innerText = "Slot added successfully!";
+        document.getElementById('subject-name').value = '';
+        document.getElementById('start-time').value = '';
+        document.getElementById('end-time').value = '';
+        loadTimetable();
+        
+        setTimeout(() => status.innerText = '', 3000);
+    } catch (err) {
+        status.innerText = "Error adding slot.";
+        console.error("Add slot error:", err);
+    }
+}
+
+async function deleteTimetableSlot(id) {
+    try {
+        await fetch(`${API_URL}/timetable/${id}`, { method: 'DELETE' });
+        loadTimetable();
+    } catch (err) {
+        console.error("Delete slot error:", err);
+    }
+}
+
+// Mock Time Logic
+async function setMockTime() {
+    const time = document.getElementById('mock-time-input').value;
+    if (!time) return;
+    try {
+        await fetch(`${API_URL}/mock_time`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ time: time })
+        });
+        document.getElementById('mock-status').innerText = 'Mock active: ' + time;
+    } catch(err) { console.error(err); }
+}
+
+async function clearMockTime() {
+    try {
+        await fetch(`${API_URL}/mock_time`, { method: 'DELETE' });
+        document.getElementById('mock-time-input').value = '';
+        document.getElementById('mock-status').innerText = 'Real time active';
+        setTimeout(() => document.getElementById('mock-status').innerText = '', 2000);
+    } catch(err) { console.error(err); }
+}
 
 // Init
 loadDashboard();

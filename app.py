@@ -22,6 +22,7 @@ app.add_middleware(
 DATASETS_DIR = 'datasets'
 HAAR_FILE = 'haarcascade_frontalface_default.xml'
 ATTENDANCE_FILE = 'attendance.csv'
+TIMETABLE_FILE = 'timetable.json'
 (WIDTH, HEIGHT) = (130, 100)
 CONFIDENCE_THRESHOLD = 80
 
@@ -61,6 +62,65 @@ def load_recognizer():
 
 # Initial Load
 load_recognizer()
+
+MOCK_TIME = None
+
+class MockTimeData(BaseModel):
+    time: str
+
+@app.post("/mock_time")
+async def set_mock_time(data: MockTimeData):
+    global MOCK_TIME
+    MOCK_TIME = data.time
+    return {"status": "mock_time_set", "time": MOCK_TIME}
+
+@app.delete("/mock_time")
+async def clear_mock_time():
+    global MOCK_TIME
+    MOCK_TIME = None
+    return {"status": "mock_time_cleared"}
+
+def get_now():
+    now = datetime.now()
+    if MOCK_TIME:
+        try:
+            h, m = map(int, MOCK_TIME.split(':'))
+            now = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        except:
+            pass
+    return now
+
+def get_current_subject(name: str):
+    if not os.path.isfile(TIMETABLE_FILE):
+        return "General"
+    with open(TIMETABLE_FILE, 'r') as f:
+        try:
+            timetable = json.load(f)
+        except:
+            timetable = []
+            
+    current_time = get_now().strftime('%H:%M')
+    
+    best_slot = None
+    min_duration = 24 * 60 # max minutes in a day
+    enrolled_list = []
+    
+    for slot in timetable:
+        st_h, st_m = map(int, slot['start_time'].split(':'))
+        en_h, en_m = map(int, slot['end_time'].split(':'))
+        
+        if slot['start_time'] <= current_time <= slot['end_time']:
+            duration = (en_h * 60 + en_m) - (st_h * 60 + st_m)
+            if duration < min_duration:
+                min_duration = duration
+                best_slot = slot['subject']
+                enrolled_list = slot.get('enrolled_users', [])
+                
+    if best_slot:
+        if len(enrolled_list) > 0 and name not in enrolled_list:
+            return "General" # Fallback to Campus presence
+        return best_slot
+    return "General"
 
 class ProcessFrame(BaseModel):
     image: str # Base64 string
@@ -113,21 +173,34 @@ async def recognize(data: ProcessFrame):
 async def mark_attendance(name: str = Form(...)):
     if name == "Unknown": return {"status": "ignored"}
     
+    subject = get_current_subject(name)
+
     if not os.path.isfile(ATTENDANCE_FILE):
         with open(ATTENDANCE_FILE, 'w') as f:
-            f.write('Name,DateTime\n')
+            f.write('Name,Subject,DateTime\n')
+
+    now_dt = get_now()
+    dt_string = now_dt.strftime('%Y-%m-%d %H:%M:%S')
+    date_string = now_dt.strftime('%Y-%m-%d')
 
     with open(ATTENDANCE_FILE, 'r+') as f:
         lines = f.readlines()
-        names_logged = [line.split(',')[0].strip() for line in lines]
         
-        if name not in names_logged:
-            now = datetime.now()
-            dt_string = now.strftime('%Y-%m-%d %H:%M:%S')
+        already_logged = False
+        if len(lines) > 1:
+            for line in lines[1:]:
+                parts = line.split(',')
+                if len(parts) >= 3:
+                    log_name, log_subject, log_datetime = parts[0].strip(), parts[1].strip(), parts[2].strip()
+                    if log_name == name and log_subject == subject and log_datetime.startswith(date_string):
+                        already_logged = True
+                        break
+        
+        if not already_logged:
             if lines and not lines[-1].endswith('\n'):
                 f.write('\n')
-            f.write(f'{name},{dt_string}\n')
-            return {"status": "marked", "name": name, "time": dt_string}
+            f.write(f'{name},{subject},{dt_string}\n')
+            return {"status": "marked", "name": name, "subject": subject, "time": dt_string}
             
     return {"status": "already_marked"}
 
@@ -138,11 +211,14 @@ async def get_attendance():
     
     logs = []
     with open(ATTENDANCE_FILE, 'r') as f:
-        next(f) # skip header
+        next(f, None) # skip header safely
         for line in f:
-            if ',' in line:
-                name, dt = line.strip().split(',')
-                logs.append({"name": name, "time": dt})
+            parts = line.strip().split(',')
+            if len(parts) >= 3:
+                logs.append({"name": parts[0], "subject": parts[1], "time": parts[2]})
+            elif len(parts) == 2:
+                # Handle old logs
+                logs.append({"name": parts[0], "subject": "General", "time": parts[1]})
     return logs[::-1] # return latest first
 
 @app.post("/add_user")
@@ -175,7 +251,7 @@ async def add_user(name: str = Form(...), images: list[str] = Form(...)):
 async def clear_logs():
     if os.path.exists(ATTENDANCE_FILE):
         with open(ATTENDANCE_FILE, 'w') as f:
-            f.write('Name,DateTime\n')
+            f.write('Name,Subject,DateTime\n')
     return {"status": "logs_cleared"}
 
 @app.delete("/users/{name}")
@@ -191,6 +267,42 @@ async def delete_user(name: str):
     # Reload recognizer to update model and names_map
     load_recognizer()
     return {"status": "user_deleted", "name": name}
+
+class TimetableSlot(BaseModel):
+    subject: str
+    start_time: str
+    end_time: str
+    enrolled_users: list[str] = []
+
+@app.get("/timetable")
+async def get_timetable():
+    if not os.path.isfile(TIMETABLE_FILE):
+        return []
+    with open(TIMETABLE_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return []
+
+@app.post("/timetable")
+async def add_timetable(slot: TimetableSlot):
+    slots = await get_timetable()
+    new_slot = slot.dict()
+    new_slot["id"] = int(datetime.now().timestamp()) # Unique ID
+    slots.append(new_slot)
+    
+    with open(TIMETABLE_FILE, 'w') as f:
+        json.dump(slots, f, indent=4)
+    return {"status": "added", "slot": new_slot}
+
+@app.delete("/timetable/{slot_id}")
+async def delete_timetable(slot_id: int):
+    slots = await get_timetable()
+    slots = [s for s in slots if s.get("id") != slot_id]
+    
+    with open(TIMETABLE_FILE, 'w') as f:
+        json.dump(slots, f, indent=4)
+    return {"status": "deleted"}
 
 if __name__ == "__main__":
     import uvicorn
