@@ -305,9 +305,30 @@ async def delete_timetable(slot_id: int):
         json.dump(slots, f, indent=4)
     return {"status": "deleted"}
 
+@app.put("/timetable/{slot_id}")
+async def edit_timetable(slot_id: int, slot_data: TimetableSlot):
+    slots = []
+    if os.path.exists(TIMETABLE_FILE):
+        with open(TIMETABLE_FILE, 'r') as f:
+            try: slots = json.load(f)
+            except: pass
+            
+    for s in slots:
+        if s.get('id') == slot_id:
+            s['subject'] = slot_data.subject
+            s['start_time'] = slot_data.start_time
+            s['end_time'] = slot_data.end_time
+            s['enrolled_users'] = slot_data.enrolled_users
+            break
+            
+    with open(TIMETABLE_FILE, 'w') as f:
+        json.dump(slots, f, indent=4)
+        
+    return {"status": "success"}
+
 class PerformanceData(BaseModel):
     name: str
-    score: int
+    score: float
 
 @app.post("/performance")
 async def update_performance(data: PerformanceData):
@@ -351,18 +372,69 @@ async def get_analytics():
     if max_att == 0: max_att = 1
     
     for u in all_users:
-        score = perf_data.get(u, 0)
+        cgpa = float(perf_data.get(u, 0.0))
         att_c = attendance_counts.get(u, 0)
         att_perc = (att_c / max_att) * 100
+        cgpa_perc = (cgpa / 10.0) * 100
         
         analytics.append({
             "name": u,
             "attendance_count": att_c,
             "attendance_perc": round(att_perc),
-            "performance_score": score
+            "performance_score": round(cgpa_perc),
+            "cgpa": round(cgpa, 2)
         })
         
     return analytics
+
+@app.get("/students")
+async def get_students():
+    all_names = list(set(names_map.values()))
+    perf_data = {}
+    if os.path.exists(PERFORMANCE_FILE):
+        with open(PERFORMANCE_FILE, 'r') as f:
+            try: perf_data = json.load(f)
+            except: pass
+            
+    slots = []
+    if os.path.exists(TIMETABLE_FILE):
+        with open(TIMETABLE_FILE, 'r') as f:
+            try: slots = json.load(f)
+            except: pass
+            
+    result = []
+    for n in all_names:
+        enrolled_slots = [s['id'] for s in slots if n in s.get('enrolled_users', [])]
+        result.append({
+            "name": n,
+            "cgpa": float(perf_data.get(n, 0.0)),
+            "enrolled_slots": enrolled_slots
+        })
+    return result
+
+class SetStudentClasses(BaseModel):
+    slot_ids: list[int]
+
+@app.post("/student/{name}/classes")
+async def set_student_classes(name: str, data: SetStudentClasses):
+    slots = []
+    if os.path.exists(TIMETABLE_FILE):
+        with open(TIMETABLE_FILE, 'r') as f:
+            try: slots = json.load(f)
+            except: pass
+            
+    for s in slots:
+        users = set(s.get('enrolled_users', []))
+        if s.get('id') in data.slot_ids:
+            users.add(name)
+        else:
+            users.discard(name)
+        s['enrolled_users'] = list(users)
+        
+    with open(TIMETABLE_FILE, 'w') as f:
+        json.dump(slots, f, indent=4)
+        
+    return {"status": "success"}
 
 if __name__ == "__main__":
     import uvicorn

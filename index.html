@@ -10,10 +10,9 @@
 <body>
     <nav>
         <div class="logo">FaceID Pro</div>
-        <ul class="nav-links">
             <li class="active" onclick="showPage('dashboard')">Dashboard</li>
             <li onclick="showPage('scanner')">Live Scanner</li>
-            <li onclick="showPage('users')">User Manager</li>
+            <li onclick="showPage('users')">Student Section</li>
             <li onclick="showPage('timetable')">Timetable</li>
             <li onclick="showPage('attendance')">Attendance Record</li>
             <li onclick="showPage('analytics')">Analytics</li>
@@ -86,12 +85,12 @@
             </div>
         </div>
 
-        <!-- Users Page -->
+        <!-- Student Section -->
         <div id="users" class="page">
-            <h1>User Manager</h1>
+            <h1>Student Section</h1>
             <div class="grid">
                 <div class="card">
-                    <h3>Add New User</h3>
+                    <h3>Add New Student</h3>
                     <input type="text" id="new-user-name" placeholder="Full Name">
                     <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
                         Capture images by looking at the camera.
@@ -101,9 +100,33 @@
                 </div>
                 
                 <div class="card">
-                    <h3>Registered Users</h3>
+                    <h3>Registered Students</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted);">Click a student to open their profile editor.</p>
                     <div id="registered-users-list" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem;">
                         <!-- List of names -->
+                    </div>
+                </div>
+
+                <div class="card" id="student-profile-editor" style="display:none; grid-column: 1 / -1;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3>Profile: <span id="profile-name" style="color: var(--primary);"></span></h3>
+                        <button class="btn btn-danger" onclick="document.getElementById('student-profile-editor').style.display='none'" style="padding: 0.3rem 0.6rem; font-size:0.8rem;">Close</button>
+                    </div>
+                    <div style="display: flex; gap: 2rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted);">Cumulative Grade (CGPA: 0.0 - 10.0)</label>
+                            <input type="number" id="profile-cgpa" step="0.1" min="0" max="10" placeholder="e.g. 9.5">
+                            <button class="btn" onclick="saveProfileCgpa()" style="width: 100%;">Save CGPA</button>
+                            <div id="cgpa-status" style="font-size:0.75rem; color:var(--primary); margin-top:0.5rem;"></div>
+                        </div>
+                        <div style="flex: 2;">
+                            <label style="font-size: 0.8rem; color: var(--text-muted);">Enrolled Classes</label>
+                            <div id="profile-classes" style="background: var(--glass); border: 1px solid var(--border); padding: 1rem; border-radius: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                <!-- Checkboxes -->
+                            </div>
+                            <button class="btn" onclick="saveProfileClasses()" style="margin-top: 1rem;">Update Class Mapping</button>
+                            <div id="mapping-status" style="font-size:0.75rem; color:var(--primary); margin-top:0.5rem;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -148,7 +171,7 @@
                                     <th>Subject</th>
                                     <th>Time Box</th>
                                     <th>Enrolled Students</th>
-                                    <th>Action</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="timetable-list">
@@ -189,24 +212,6 @@
         <div id="analytics" class="page">
             <h1>Academic Correlation</h1>
             <p style="color: var(--text-muted); margin-bottom: 2rem;">Analyze how class attendance connects to academic scoring.</p>
-            
-            <div class="card" style="margin-bottom: 2rem;">
-                <h3>Assign Academic Score</h3>
-                <div style="display: flex; gap: 1rem; align-items: flex-end; margin-top: 1rem;">
-                    <div style="flex: 1;">
-                        <label style="font-size: 0.8rem; color: var(--text-muted);">Select Student</label>
-                        <select id="perf-user-select" style="background: var(--glass); border: 1px solid var(--border); color: white; padding: 0.75rem 1rem; border-radius: 0.5rem; width: 100%;">
-                            <!-- Loaded natively via JS -->
-                        </select>
-                    </div>
-                    <div style="flex: 1;">
-                        <label style="font-size: 0.8rem; color: var(--text-muted);">Score (0 - 100)</label>
-                        <input type="number" id="perf-score" min="0" max="100" placeholder="e.g. 85" style="margin-bottom: 0;">
-                    </div>
-                    <button class="btn" onclick="savePerformance()">Assign Grade</button>
-                </div>
-                <div id="perf-status" style="margin-top: 1rem; color: var(--primary);"></div>
-            </div>
 
             <div class="card">
                 <h3>Attendance vs Performance</h3>
@@ -216,7 +221,7 @@
                             <tr>
                                 <th>Student</th>
                                 <th style="width: 25%;">Attendance Level</th>
-                                <th style="width: 25%;">Academic Score</th>
+                                <th style="width: 25%;">Academic CGPA</th>
                                 <th>Insight</th>
                             </tr>
                         </thead>

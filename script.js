@@ -151,9 +151,9 @@ async function loadUsers() {
         const data = await res.json();
         const list = document.getElementById('registered-users-list');
         list.innerHTML = data.users.map(u => `
-            <div class="user-item">
+            <div class="user-item" onclick="openStudentProfile('${u}')" style="cursor: pointer; transition: background 0.2s;" title="Click to Edit Profile">
                 <span>${u}</span>
-                <button class="delete-user-btn" onclick="deleteUser('${u}')" title="Delete User">×</button>
+                <button class="delete-user-btn" onclick="event.stopPropagation(); deleteUser('${u}')" title="Delete User">×</button>
             </div>
         `).join('');
     } catch (err) {
@@ -225,6 +225,82 @@ async function deleteUser(name) {
     }
 }
 
+// Student Editor Logic
+let activeStudentProfile = null;
+
+async function openStudentProfile(name) {
+    activeStudentProfile = name;
+    document.getElementById('student-profile-editor').style.display = 'block';
+    document.getElementById('profile-name').innerText = name;
+    
+    try {
+        const res = await fetch(`${API_URL}/students`);
+        const studentsData = await res.json();
+        const student = studentsData.find(s => s.name === name);
+        
+        if (student) {
+            document.getElementById('profile-cgpa').value = student.cgpa;
+        } else {
+            document.getElementById('profile-cgpa').value = 0.0;
+        }
+        
+        const ttRes = await fetch(`${API_URL}/timetable`);
+        const timetables = await ttRes.json();
+        
+        const classContainer = document.getElementById('profile-classes');
+        if (timetables.length === 0) {
+            classContainer.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted);">No active timetable slots exist.</p>';
+        } else {
+            const enrolled = student ? student.enrolled_slots : [];
+            classContainer.innerHTML = timetables.map(t => {
+                const isChecked = enrolled.includes(t.id) ? 'checked' : '';
+                return `
+                <label style="font-size:0.85rem; display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                    <input type="checkbox" value="${t.id}" class="profile-class-cb" ${isChecked}>
+                    ${t.subject} (${t.start_time} - ${t.end_time})
+                </label>
+                `;
+            }).join('');
+        }
+    } catch(err) { console.error(err); }
+}
+
+async function saveProfileCgpa() {
+    const cgpa = parseFloat(document.getElementById('profile-cgpa').value);
+    const status = document.getElementById('cgpa-status');
+    
+    if (isNaN(cgpa) || cgpa < 0 || cgpa > 10) {
+        status.innerText = "Please enter valid CGPA (0.0 to 10.0)";
+        return;
+    }
+    
+    try {
+        await fetch(`${API_URL}/performance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: activeStudentProfile, score: cgpa })
+        });
+        status.innerText = "CGPA saved!";
+        setTimeout(() => status.innerText='', 3000);
+    } catch(err) { console.error(err); }
+}
+
+async function saveProfileClasses() {
+    const checkboxes = document.querySelectorAll('.profile-class-cb');
+    const slotIds = Array.from(checkboxes).filter(cb => cb.checked).map(cb => parseInt(cb.value));
+    const status = document.getElementById('mapping-status');
+    
+    try {
+        await fetch(`${API_URL}/student/${activeStudentProfile}/classes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slot_ids: slotIds })
+        });
+        status.innerText = "Mapped classes saved seamlessly!";
+        setTimeout(() => status.innerText='', 3000);
+    } catch(err) { console.error(err); }
+}
+
 
 // Timetable logic
 let selectedTimetableUsers = new Set();
@@ -244,14 +320,20 @@ async function loadTimetable() {
         const res = await fetch(`${API_URL}/timetable`);
         const data = await res.json();
         const list = document.getElementById('timetable-list');
-        list.innerHTML = data.map(t => `
+        list.innerHTML = data.map(t => {
+            const encodedEnrolled = btoa(JSON.stringify(t.enrolled_users || []));
+            return `
             <tr>
                 <td>${t.subject}</td>
                 <td>${t.start_time} - ${t.end_time}</td>
                 <td>${(t.enrolled_users && t.enrolled_users.length > 0) ? t.enrolled_users.map(u => `<span style="background:var(--primary);color:white;padding:0.2rem 0.5rem;border-radius:10px;font-size:0.7rem;margin-right:0.3rem;">${u}</span>`).join('') : '<span style="color:var(--text-muted);font-size:0.8rem;">All Active</span>'}</td>
-                <td><button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="deleteTimetableSlot(${t.id})">Delete</button></td>
+                <td>
+                    <button class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: var(--glass);" onclick="editTimetableSlot(${t.id}, '${t.subject}', '${t.start_time}', '${t.end_time}', '${encodedEnrolled}')">Edit</button>
+                    <button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;" onclick="deleteTimetableSlot(${t.id})">Delete</button>
+                </td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
 
         const userRes = await fetch(`${API_URL}/status`);
         const userData = await userRes.json();
@@ -271,6 +353,31 @@ async function loadTimetable() {
     }
 }
 
+// Timetable Edit Logic
+let editingSlotId = null;
+
+function editTimetableSlot(id, subject, start, end, enrolledBase64) {
+    editingSlotId = id;
+    document.getElementById('subject-name').value = subject;
+    document.getElementById('start-time').value = start;
+    document.getElementById('end-time').value = end;
+    
+    let enrolled = JSON.parse(atob(enrolledBase64));
+    
+    selectedTimetableUsers.clear();
+    const pills = document.querySelectorAll('#timetable-student-selector .user-pill');
+    pills.forEach(p => {
+        p.classList.remove('selected');
+        if (enrolled.includes(p.innerText)) {
+            p.classList.add('selected');
+            selectedTimetableUsers.add(p.innerText);
+        }
+    });
+
+    document.getElementById('timetable-status').innerText = 'Editing existing slot...';
+    window.scrollTo(0, 0);
+}
+
 async function addTimetableSlot() {
     const subject = document.getElementById('subject-name').value.trim();
     const start = document.getElementById('start-time').value;
@@ -288,17 +395,33 @@ async function addTimetableSlot() {
     }
 
     try {
-        await fetch(`${API_URL}/timetable`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                subject: subject, 
-                start_time: start, 
-                end_time: end,
-                enrolled_users: Array.from(selectedTimetableUsers)
-            })
-        });
-        status.innerText = "Slot added successfully!";
+        if (editingSlotId) {
+            await fetch(`${API_URL}/timetable/${editingSlotId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    subject: subject, 
+                    start_time: start, 
+                    end_time: end,
+                    enrolled_users: Array.from(selectedTimetableUsers)
+                })
+            });
+            status.innerText = "Slot updated successfully!";
+            editingSlotId = null;
+        } else {
+            await fetch(`${API_URL}/timetable`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    subject: subject, 
+                    start_time: start, 
+                    end_time: end,
+                    enrolled_users: Array.from(selectedTimetableUsers)
+                })
+            });
+            status.innerText = "Slot added successfully!";
+        }
+        
         document.getElementById('subject-name').value = '';
         document.getElementById('start-time').value = '';
         document.getElementById('end-time').value = '';
@@ -387,7 +510,7 @@ async function loadAnalytics() {
                     </td>
                     <td>
                         <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:0.2rem;">
-                            <span>Grade</span><span>${u.performance_score}%</span>
+                            <span>CGPA</span><span>${u.cgpa}</span>
                         </div>
                         <div class="analytics-bar-bg">
                             <div class="analytics-bar-fill ${perfColor}" style="width: ${u.performance_score}%"></div>
@@ -398,43 +521,8 @@ async function loadAnalytics() {
                 `;
             }).join('');
         }
-        
-        const userRes = await fetch(`${API_URL}/status`);
-        const userData = await userRes.json();
-        const select = document.getElementById('perf-user-select');
-        if (select && userData.users) {
-            select.innerHTML = '<option value="">-- Choose User --</option>' + userData.users.map(u => `<option value="${u}" style="color:black;">${u}</option>`).join('');
-        }
-        
     } catch (err) {
         console.error("Analytics load error:", err);
-    }
-}
-
-async function savePerformance() {
-    const name = document.getElementById('perf-user-select').value;
-    const score = parseInt(document.getElementById('perf-score').value);
-    const status = document.getElementById('perf-status');
-    
-    if (!name || isNaN(score) || score < 0 || score > 100) {
-        status.innerText = "Please select a user and enter a valid score (0-100).";
-        return;
-    }
-    
-    try {
-        await fetch(`${API_URL}/performance`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name, score: score })
-        });
-        status.innerText = "Academic score assigned seamlessly!";
-        document.getElementById('perf-score').value = '';
-        loadAnalytics();
-        
-        setTimeout(() => status.innerText = '', 3000);
-    } catch (err) {
-        status.innerText = "Failed to assign score.";
-        console.error(err);
     }
 }
 
