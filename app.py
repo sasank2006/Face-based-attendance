@@ -7,6 +7,7 @@ import os
 import base64
 from datetime import datetime
 import json
+import asyncio
 
 app = FastAPI()
 
@@ -26,6 +27,62 @@ TIMETABLE_FILE = 'timetable.json'
 PERFORMANCE_FILE = 'performance.json'
 (WIDTH, HEIGHT) = (130, 100)
 CONFIDENCE_THRESHOLD = 80
+
+# State memory for absent tracking
+processed_absent_slots = set()
+
+async def auto_absent_loop():
+    while True:
+        await asyncio.sleep(10)
+        now_dt = get_now()
+        date_str = now_dt.strftime('%Y-%m-%d')
+        current_time = now_dt.strftime('%H:%M')
+        
+        slots = []
+        if os.path.exists(TIMETABLE_FILE):
+            with open(TIMETABLE_FILE, 'r') as f:
+                try: slots = json.load(f)
+                except: pass
+                
+        if not slots: continue
+        
+        for s in slots:
+            slot_key = f"{date_str}-{s.get('id')}"
+            if slot_key in processed_absent_slots: continue
+            
+            end_t = s['end_time']
+            if current_time > end_t:
+                enrolled = s.get('enrolled_users', [])
+                if not enrolled:
+                    processed_absent_slots.add(slot_key)
+                    continue
+                    
+                presents = set()
+                if os.path.exists(ATTENDANCE_FILE):
+                    with open(ATTENDANCE_FILE, 'r') as f:
+                        next(f, None)
+                        for line in f:
+                            p = line.strip().split(',')
+                            if len(p) >= 4:
+                                n, sub, dt, status = p[0].strip(), p[1].strip(), p[2].strip(), p[3].strip()
+                                if sub == s['subject'] and dt.startswith(date_str) and status == "Present":
+                                    presents.add(n)
+                                    
+                absents = [u for u in enrolled if u not in presents]
+                
+                if absents:
+                    mode = 'a' if os.path.exists(ATTENDANCE_FILE) else 'w'
+                    with open(ATTENDANCE_FILE, mode) as f:
+                        if mode == 'w': f.write('Name,Subject,DateTime,Status\n')
+                        for a in absents:
+                            dt_str = f"{date_str} {end_t}:00"
+                            f.write(f"{a},{s['subject']},{dt_str},Absent\n")
+                            
+                processed_absent_slots.add(slot_key)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(auto_absent_loop())
 
 # State
 model = None
@@ -178,7 +235,7 @@ async def mark_attendance(name: str = Form(...)):
 
     if not os.path.isfile(ATTENDANCE_FILE):
         with open(ATTENDANCE_FILE, 'w') as f:
-            f.write('Name,Subject,DateTime\n')
+            f.write('Name,Subject,DateTime,Status\n')
 
     now_dt = get_now()
     dt_string = now_dt.strftime('%Y-%m-%d %H:%M:%S')
@@ -191,18 +248,17 @@ async def mark_attendance(name: str = Form(...)):
         if len(lines) > 1:
             for line in lines[1:]:
                 parts = line.split(',')
-                if len(parts) >= 3:
-                    log_name, log_subject, log_datetime = parts[0].strip(), parts[1].strip(), parts[2].strip()
-                    if log_name == name and log_subject == subject and log_datetime.startswith(date_string):
+                if len(parts) >= 4:
+                    log_name, log_subject, log_datetime, log_status = parts[0].strip(), parts[1].strip(), parts[2].strip(), parts[3].strip()
+                    if log_name == name and log_subject == subject and log_datetime.startswith(date_string) and log_status == "Present":
                         already_logged = True
                         break
         
         if not already_logged:
             if lines and not lines[-1].endswith('\n'):
                 f.write('\n')
-            f.write(f'{name},{subject},{dt_string}\n')
+            f.write(f'{name},{subject},{dt_string},Present\n')
             return {"status": "marked", "name": name, "subject": subject, "time": dt_string}
-            
     return {"status": "already_marked"}
 
 @app.get("/attendance")
@@ -359,10 +415,11 @@ async def get_analytics():
             next(f, None)
             for line in f:
                 parts = line.strip().split(',')
-                if len(parts) >= 3:
+                if len(parts) >= 4:
                     name = parts[0].strip()
                     subject = parts[1].strip()
-                    if subject not in ["General", "Campus"]:
+                    status = parts[3].strip()
+                    if subject not in ["General", "Campus"] and status == "Present":
                         attendance_counts[name] = attendance_counts.get(name, 0) + 1
                         
     # Ensure distinct user mapping
