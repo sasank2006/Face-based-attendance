@@ -1,0 +1,14 @@
+# Python noise
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Project specific
+datasets/
+attendance.csv
+unknown.jpg
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
